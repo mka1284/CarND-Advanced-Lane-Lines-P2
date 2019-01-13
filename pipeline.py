@@ -102,35 +102,173 @@ def correct_imgs_in_folder(mtx, dist, rvecs, tvec, folder):
 ################### End calibration 0.
 
 
+###################* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
 
-def pipeline():
+def white_yellow_mask(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    # For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255].
+
+    white_mask = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([179, 25, 255]))
+    white_image = cv2.bitwise_and(img, img, mask=white_mask)
+
+    yellow_mask = cv2.inRange(hsv, np.array([90, 120, 0]), np.array([120, 255, 255]))
+    yellow_image = cv2.bitwise_and(img, img, mask=yellow_mask)
+
+    #combined_mask = cv2.bitwise_or(yellow_mask, white_mask);
+
+    final_image = cv2.add(white_image, yellow_image)
+
+    return final_image
+
+def grayscale(img):
+    """Applies the Grayscale transform
+    This will return an image with only one color channel
+    but NOTE: to see the returned image as grayscale
+    (assuming your grayscaled image is called 'gray')
+    you should call plt.imshow(gray, cmap='gray')"""
+    return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # Or use BGR2GRAY if you read an image with cv2.imread()
+    # return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+
+def region_of_interest(img, vertices):
+    """
+    Applies an image mask.
+
+    Only keeps the region of the image defined by the polygon
+    formed from `vertices`. The rest of the image is set to black.
+    `vertices` should be a numpy array of integer points.
+    """
+
+    # defining a blank mask to start with
+    mask = np.zeros_like(img)
+
+    # defining a 3 channel or 1 channel color to fill the mask with depending on the input image
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+
+    # filling pixels inside the polygon defined by "vertices" with the fill color
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
+
+    # returning the image only where mask pixels are nonzero
+    masked_image = cv2.bitwise_and(img, mask)
+
+    return masked_image
+
+
+def cut_area(img):
+    """
+    Makes black everything laying outside of the desired area
+    """
+    # pts – Array of polygons where each polygon is represented as an array of points.
+    vertices = np.array([[(0, 540), (480, 320), (960, 540)]], dtype=np.int32)
+    masked_image = region_of_interest(img, vertices)
+
+    return masked_image
+
+
+def create_binary_image(initial_image):
+    #plt.imshow(initial_image)
+    #plt.title('original image')
+
+    #white_masked = initial_image
+    white_yellow_masked = white_yellow_mask(initial_image)
+    #plt.figure()
+    #plt.imshow(white_masked)
+    #plt.title('white mask')
+
+    gray_image = grayscale(white_yellow_masked)
+    #plt.figure()
+    #plt.imshow(gray_image, cmap='gray')
+    #plt.title('grayscale')
+
+    #blurred_image = gaussian_blur(gray_image, 5)
+    #plt.figure()
+    #plt.imshow(blurred_image, cmap='gray')
+    #plt.title('gaussian_blur')
+
+    #canny_image = canny(blurred_image, 50, 150)
+    # plt.figure()
+    # plt.imshow(canny_image, cmap='gray')
+    # plt.title('canny')
+
+    cut_image = cut_area(gray_image)
+    # plt.figure()
+    # plt.imshow(cut_image, cmap='gray')
+    # plt.title('cut image')
+
+    #hough_image, lines = hough_trans(canny_image)
+    # plt.figure()
+    # plt.imshow(hough_image)
+    # plt.title('hough image')
+
+    s_thresh_min = 100
+    s_thresh_max = 255
+    s_binary = np.zeros_like(cut_image)
+    s_binary[(cut_image >= s_thresh_min) & (cut_image <= s_thresh_max)] = 255
+
+    return s_binary
+
+################### End thresholded binary image
+
+def pipeline(img, filename):
 
     #* 0. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
     if not os.path.isfile('undistort_pickle.p'):
         mtx, dist, rvecs, tvec = chessboard_calibration()
         pickle.dump([mtx, dist, rvecs, tvec], open( "undistort_pickle.p", "wb" ))
     else:
-        [mtx, dist, rvecs, tvec] = pickle.load(open("undistort_pickle.p", "r"))
+        mtx, dist, rvecs, tvec = pickle.load(open("undistort_pickle.p", "rb"))
+        correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'camera_cal')
 
-    correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'camera_cal')
-
-    #* 1. Apply a distortion correction to raw images.
-    correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'test_images')
-
+    #* 1. Apply a distortion correction to raw image
+    undistorted = cv2.undistort(img, mtx, dist, None, mtx)
 
     #* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
-    #' 2_CreateBinaryImage
+    output_img = create_binary_image(undistorted)
 
     #* 3. Apply a perspective transform to rectify binary image ("birds-eye view").
-    #' 3_PerspectiveTransform
-    #'
+
+
     #* Detect lane pixels and fit to find the lane boundary.
     #* Determine the curvature of the lane and vehicle position with respect to center.
     #* Warp the detected lane boundaries back onto the original image.
     #* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
 
+    return output_img
+
+
+def pipeline_on_images():
+
+    #for filename in os.listdir("test_images/"):
+
+    filename = "straight_lines1.jpg"
+
+    #image = mpimg.imread('camera_cal/' + filename)
+    image = mpimg.imread("test_images/" + filename)
+    final_image = pipeline(image, filename)
+    cv2.imwrite('output_images/' + filename, final_image)
+
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    #f, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 9))
+    f.tight_layout()
+    ax1.imshow(image)
+    ax1.set_title('Original Image')
+    ax2.imshow(final_image, cmap='gray')
+    ax2.set_title('Output Image')
+    #plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
+    plt.show()
+
+    #plt.figure()
+    #plt.imshow(final_image, cmap='gray')
+    #plt.title(filename)
+    #plt.show()
+
     return
 
 
-pipeline()
+pipeline_on_images()
