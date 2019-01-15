@@ -164,7 +164,7 @@ def cut_area(img):
     Makes black everything laying outside of the desired area
     """
     # pts – Array of polygons where each polygon is represented as an array of points.
-    vertices = np.array([[(0, 540), (480, 320), (960, 540)]], dtype=np.int32)
+    vertices = np.array([[(100, 700), (650, 400), (1200, 700)]], dtype=np.int32)
     masked_image = region_of_interest(img, vertices)
 
     return masked_image
@@ -214,6 +214,60 @@ def create_binary_image(initial_image):
 
 ################### End thresholded binary image
 
+
+################### 3. Apply a perspective transform to rectify binary image ("birds-eye view").
+
+
+def determine_perspective_transform_matrix():
+
+    img = mpimg.imread("test_images/straight_lines1.jpg")
+    plt.imshow(img)
+    plt.show()
+
+    img_size = (img.shape[1], img.shape[0])
+
+    # For source points I'm grabbing the outer four detected corners
+
+    #src = np.float32([corners[0], corners[nx - 1], corners[-1], corners[-nx]])
+
+    src = np.float32([[203,719],[537,491], [1091, 717], [749, 492]])
+    dst = np.float32([[203,719],[203,491], [1091, 717], [1091, 492]])
+
+    # For destination points, I'm arbitrarily choosing some points to be
+    # a nice fit for displaying our warped result
+    # again, not exact, but close enough for our purposes
+
+    #dst = np.float32([[offset, offset], [img_size[0] - offset, offset], [img_size[0] - offset, img_size[1] - offset], [offset, img_size[1] - offset]])
+
+    # Given src and dst points, calculate the perspective transform matrix
+    M = cv2.getPerspectiveTransform(src, dst)
+    # Warp the image using OpenCV warpPerspective()
+    #warped = cv2.warpPerspective(img, M, img_size)
+
+    #plt.imshow(warped)
+    #plt.show()
+
+    return M
+
+def perspective_transform(img):
+
+    if not os.path.isfile('M_pickle.p'):
+        M = determine_perspective_transform_matrix()
+        pickle.dump(M, open( "M_pickle.p", "wb" ))
+    else:
+        M = pickle.load(open("M_pickle.p", "rb"))
+
+    img_size = (img.shape[1], img.shape[0])
+    warped = cv2.warpPerspective(img, M, img_size)
+
+    return warped
+
+################## End perspective transform
+
+
+
+
+
 def pipeline(img, filename):
 
     #* 0. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
@@ -228,45 +282,53 @@ def pipeline(img, filename):
     undistorted = cv2.undistort(img, mtx, dist, None, mtx)
 
     #* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
-    output_img = create_binary_image(undistorted)
+    binary_img = create_binary_image(undistorted)
 
     #* 3. Apply a perspective transform to rectify binary image ("birds-eye view").
+    output_img = perspective_transform(binary_img)
+
+    #* 4. Detect lane pixels and fit to find the lane boundary.
 
 
-    #* Detect lane pixels and fit to find the lane boundary.
     #* Determine the curvature of the lane and vehicle position with respect to center.
     #* Warp the detected lane boundaries back onto the original image.
     #* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
+    f = plt.figure(figsize=(18, 7))
+    plt.tight_layout()
+
+    p1 = plt.subplot(2, 3, 1)
+    p1.imshow(img)
+    p1.set_title(('Original Image'))
+
+    p2 = plt.subplot(2, 3, 2)
+    p2.imshow(undistorted)
+    p2.set_title(('Undistorted Image'))
+
+    p2 = plt.subplot(2, 3, 3)
+    p2.imshow(binary_img, cmap='gray')
+    p2.set_title(('Binary Image'))
+
+    p2 = plt.subplot(2, 3, 4)
+    p2.imshow(output_img, cmap='gray')
+    p2.set_title(('Output Image'))
+
+    plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
+    plt.show()
 
     return output_img
 
 
 def pipeline_on_images():
 
-    #for filename in os.listdir("test_images/"):
+    for filename in os.listdir("test_images/"):
 
-    filename = "straight_lines1.jpg"
+        #filename = "straight_lines1.jpg"
 
-    #image = mpimg.imread('camera_cal/' + filename)
-    image = mpimg.imread("test_images/" + filename)
-    final_image = pipeline(image, filename)
-    cv2.imwrite('output_images/' + filename, final_image)
-
-    f, (ax1, ax2) = plt.subplots(1, 2)
-    #f, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 9))
-    f.tight_layout()
-    ax1.imshow(image)
-    ax1.set_title('Original Image')
-    ax2.imshow(final_image, cmap='gray')
-    ax2.set_title('Output Image')
-    #plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
-    plt.show()
-
-    #plt.figure()
-    #plt.imshow(final_image, cmap='gray')
-    #plt.title(filename)
-    #plt.show()
+        #image = mpimg.imread('camera_cal/' + filename)
+        image = mpimg.imread("test_images/" + filename)
+        final_image = pipeline(image, filename)
+        cv2.imwrite('output_images/' + filename, final_image)
 
     return
 
