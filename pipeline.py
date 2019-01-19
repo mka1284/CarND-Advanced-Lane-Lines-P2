@@ -379,12 +379,16 @@ def fit_polynomial(leftx, lefty, rightx, righty, out_img):
     ploty_int = ploty.astype(int)
     left_fitx_int = left_fitx.astype(int)
 
-    if not any(left_fitx > out_img.shape[1]):
+    #if all(0 <= left_fitx < out_img.shape[1] for item in left_fitx):
+
+    if not any(0 <= left_fitx) and not any( left_fitx > out_img.shape[1]):
         out_img[ploty.astype(int), left_fitx.astype(int)-1] = [255,0,0]
         out_img[ploty.astype(int), left_fitx.astype(int)] = [255, 0, 0]
         out_img[ploty.astype(int), left_fitx.astype(int)+1] = [255, 0, 0]
 
-    if not any(right_fitx > out_img.shape[1]):
+    #if all(0 <= right_fitx < out_img.shape[1] for item in right_fitx):
+
+    if not any(0 <= right_fitx) and not any( right_fitx > out_img.shape[1]):
         out_img[ploty.astype(int), right_fitx.astype(int)-1] = [255,0,0]
         out_img[ploty.astype(int), right_fitx.astype(int)] = [255,0,0]
         out_img[ploty.astype(int), right_fitx.astype(int)+1] = [255,0,0]
@@ -533,8 +537,7 @@ def pipeline(img, showimgs=False):
         plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
         plt.show()
 
-    return warped_img_with_lanes
-
+    return final_img
 
 def pipeline_on_images():
 
@@ -550,5 +553,31 @@ def pipeline_on_images():
     return
 
 
-pipeline_on_images()
+def pipeline_on_video():
+    # Import everything needed to edit/save/watch video clips
+    from moviepy.editor import VideoFileClip
+    #from IPython.display import HTML
+
+    def process_image(image):
+        # NOTE: The output you return should be a color image (3 channel) for processing video below
+        # TODO: put your pipeline here,
+        # you should return the final output (image where lines are drawn on lanes)
+        result = pipeline(image, False)
+
+        return result
+
+    white_output = 'project_video_output.mp4'
+    ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
+    ## To do so add .subclip(start_second,end_second) to the end of the line below
+    ## Where start_second and end_second are integer values representing the start and end of the subclip
+    ## You may also uncomment the following line for a subclip of the first 5 seconds
+    ##clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
+    clip1 = VideoFileClip("project_video.mp4")
+    white_clip = clip1.fl_image(process_image)  # NOTE: this function expects color images!!
+    #% time white_clip.write_videofile(white_output, audio=False)
+    white_clip.write_videofile(white_output, audio=False)
+
+    return
+
+pipeline_on_video()
 #determine_perspective_transform_matrix()
