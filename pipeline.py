@@ -469,77 +469,109 @@ def warp_back_to_original(warped, left_fitx, right_fitx, ploty, original_img, Mi
 
 ############### End Warp detected lane boundaries back
 
+# Define a class to receive the characteristics of each line detection
+class Line():
+    def __init__(self):
+        # was the line detected in the last iteration?
+        self.detected = False
+        # x values of the last n fits of the line
+        self.recent_xfitted = []
+        #average x values of the fitted line over the last n iterations
+        self.bestx = None
+        #polynomial coefficients averaged over the last n iterations
+        self.best_fit = None
+        #polynomial coefficients for the most recent fit
+        self.current_fit = [np.array([False])]
+        #radius of curvature of the line in some units
+        self.radius_of_curvature = None
+        #distance in meters of vehicle center from the line
+        self.line_base_pos = None
+        #difference in fit coefficients between last and new fits
+        self.diffs = np.array([0,0,0], dtype='float')
+        #x values for detected line pixels
+        self.allx = None
+        #y values for detected line pixels
+        self.ally = None
 
-def pipeline(img, showimgs=False):
+class LaneDetectionPipeline():
+    def __init__(self, on_video, show_imgs):
+        self.on_video = on_video
+        self.show_imgs = show_imgs
 
-    #* 0. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-    if not os.path.isfile('undistort_pickle.p'):
-        mtx, dist, rvecs, tvec = chessboard_calibration()
-        pickle.dump([mtx, dist, rvecs, tvec], open( "undistort_pickle.p", "wb" ))
-    else:
-        mtx, dist, rvecs, tvec = pickle.load(open("undistort_pickle.p", "rb"))
-        correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'camera_cal')
+    def pipeline(self, img):
 
-    #* 1. Apply a distortion correction to raw image
-    undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
+        #* 0. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
+        if not os.path.isfile('undistort_pickle.p'):
+            mtx, dist, rvecs, tvec = chessboard_calibration()
+            pickle.dump([mtx, dist, rvecs, tvec], open( "undistort_pickle.p", "wb" ))
+        else:
+            mtx, dist, rvecs, tvec = pickle.load(open("undistort_pickle.p", "rb"))
+            correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'camera_cal')
 
-    #* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
-    binary_img = create_binary_image(undistorted_img)
+        #* 1. Apply a distortion correction to raw image
+        undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
 
-    #* 3. Apply a perspective transform to rectify binary image ("birds-eye view").
-    perspective_trans_img, M = perspective_transform(binary_img)
+        #* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
+        binary_img = create_binary_image(undistorted_img)
 
-    #* 4. Detect lane pixels and fit to find the lane boundary.
-    leftx, lefty, rightx, righty, marked_img = find_lane_pixels(perspective_trans_img)
-    warped_img_with_lanes, ploty, left_fit, right_fit, left_fitx, right_fitx = fit_polynomial(leftx, lefty, rightx, righty, marked_img)
+        #* 3. Apply a perspective transform to rectify binary image ("birds-eye view").
+        perspective_trans_img, M = perspective_transform(binary_img)
 
-    #* 5. Determine the curvature of the lane and vehicle position with respect to center.
-    #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
-    left_curverad, right_curverad = measure_curvature_real(leftx, lefty, rightx, righty)
+        #* 4. Detect lane pixels and fit to find the lane boundary.
+        leftx, lefty, rightx, righty, marked_img = find_lane_pixels(perspective_trans_img)
 
-    Minv = np.linalg.inv(M)
+        #throw exception if not found
+        warped_img_with_lanes, ploty, left_fit, right_fit, left_fitx, right_fitx = fit_polynomial(leftx, lefty, rightx, righty, marked_img)
 
-    #* 6. Warp the detected lane boundaries back onto the original image.
-    final_img = warp_back_to_original(perspective_trans_img, left_fitx, right_fitx, ploty, undistorted_img, Minv)
+        #* 5. Determine the curvature of the lane and vehicle position with respect to center.
+        #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
+        left_curverad, right_curverad = measure_curvature_real(leftx, lefty, rightx, righty)
 
-    #* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-    print("Left curverad: {}, right curverad: {}".format(left_curverad, right_curverad))
+        Minv = np.linalg.inv(M)
 
-    if showimgs:
+        #* 6. Warp the detected lane boundaries back onto the original image.
+        final_img = warp_back_to_original(perspective_trans_img, left_fitx, right_fitx, ploty, undistorted_img, Minv)
 
-        f = plt.figure(figsize=(18, 7))
-        plt.tight_layout()
+        #* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
+        print("Left curverad: {}, right curverad: {}".format(left_curverad, right_curverad))
 
-        p1 = plt.subplot(2, 3, 1)
-        p1.imshow(img)
-        p1.set_title(('Original Image'))
+        if self.show_imgs:
 
-        p2 = plt.subplot(2, 3, 2)
-        p2.imshow(undistorted_img)
-        p2.set_title(('Undistorted Image'))
+            f = plt.figure(figsize=(18, 7))
+            plt.tight_layout()
 
-        p2 = plt.subplot(2, 3, 3)
-        p2.imshow(binary_img, cmap='gray')
-        p2.set_title(('Binary Image'))
+            p1 = plt.subplot(2, 3, 1)
+            p1.imshow(img)
+            p1.set_title(('Original Image'))
 
-        p2 = plt.subplot(2, 3, 4)
-        p2.imshow(perspective_trans_img, cmap='gray')
-        p2.set_title(('Perspective Transform'))
+            p2 = plt.subplot(2, 3, 2)
+            p2.imshow(undistorted_img)
+            p2.set_title(('Undistorted Image'))
 
-        p2 = plt.subplot(2, 3, 5)
-        p2.imshow(warped_img_with_lanes)
-        p2.set_title(('Detected Lane Pixels'))
+            p2 = plt.subplot(2, 3, 3)
+            p2.imshow(binary_img, cmap='gray')
+            p2.set_title(('Binary Image'))
 
-        p2 = plt.subplot(2, 3, 6)
-        p2.imshow(final_img)
-        p2.set_title(('Final Image'))
+            p2 = plt.subplot(2, 3, 4)
+            p2.imshow(perspective_trans_img, cmap='gray')
+            p2.set_title(('Perspective Transform'))
 
-        plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
-        plt.show()
+            p2 = plt.subplot(2, 3, 5)
+            p2.imshow(warped_img_with_lanes)
+            p2.set_title(('Detected Lane Pixels'))
 
-    return final_img
+            p2 = plt.subplot(2, 3, 6)
+            p2.imshow(final_img)
+            p2.set_title(('Final Image'))
+
+            plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
+            plt.show()
+
+        return final_img
 
 def pipeline_on_images():
+
+    p = LaneDetectionPipeline(False, True)
 
     for filename in os.listdir("test_images/"):
 
@@ -547,7 +579,7 @@ def pipeline_on_images():
         print(filename)
         #image = mpimg.imread('camera_cal/' + filename)
         image = mpimg.imread("test_images/" + filename)
-        final_image = pipeline(image, True)
+        final_image = p.pipeline(image)
         cv2.imwrite('output_images/' + filename, final_image)
 
     return
@@ -558,11 +590,13 @@ def pipeline_on_video():
     from moviepy.editor import VideoFileClip
     #from IPython.display import HTML
 
+    p = LaneDetectionPipeline(True, False)
+
     def process_image(image):
         # NOTE: The output you return should be a color image (3 channel) for processing video below
         # TODO: put your pipeline here,
         # you should return the final output (image where lines are drawn on lanes)
-        result = pipeline(image, False)
+        result = p.pipeline(image)
 
         return result
 
@@ -580,4 +614,5 @@ def pipeline_on_video():
     return
 
 pipeline_on_video()
+#pipeline_on_images()
 #determine_perspective_transform_matrix()
