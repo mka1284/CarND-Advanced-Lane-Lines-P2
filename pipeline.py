@@ -233,8 +233,8 @@ def determine_perspective_transform_matrix():
     #src = np.float32([[203,719],[537,491], [1091, 717], [749, 492]])
     #dst = np.float32([[203,719],[203,191], [1091, 717], [1091, 192]])
 
-    src = np.float32([[203, 719], [537, 491], [1091, 717], [749, 492]])
-    dst = np.float32([[203, 719], [203, 191], [1091, 717], [1091, 192]])
+    src = np.float32([[203, 719], [580, 457], [1091, 717], [697, 457]])
+    dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
 
     # For destination points, I'm arbitrarily choosing some points to be
     # a nice fit for displaying our warped result
@@ -350,54 +350,51 @@ def find_lane_pixels(binary_warped):
 
     return leftx, lefty, rightx, righty, out_img
 
+def generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_img):
 
-def fit_polynomial(leftx, lefty, rightx, righty, out_img):
-    # Find our lane pixels first
-
-
-    # Fit a second order polynomial to each using `np.polyfit`
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, out_img.shape[0] - 1, out_img.shape[0])
-
+    poly_y = np.linspace(0, perspective_trans_img.shape[0] - 1, perspective_trans_img.shape[0])
 
     try:
-        left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
-        right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+        poly_left_x = left_fit_coeffs[0] * poly_y ** 2 + left_fit_coeffs[1] * poly_y + left_fit_coeffs[2]
+        poly_right_x = right_fit_coeffs[0] * poly_y ** 2 + right_fit_coeffs[1] * poly_y + right_fit_coeffs[2]
     except TypeError:
         # Avoids an error if `left` and `right_fit` are still none or incorrect
         print('The function failed to fit a line!')
-        left_fitx = 1 * ploty ** 2 + 1 * ploty
-        right_fitx = 1 * ploty ** 2 + 1 * ploty
+        poly_left_x = 1 * poly_y ** 2 + 1 * poly_y
+        poly_right_x = 1 * poly_y ** 2 + 1 * poly_y
 
+
+    return poly_y, poly_left_x, poly_right_x
+
+
+
+def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,0]):
+    # Find our lane pixels first
     ## Visualization ##
     # Colors in the left and right lane regions
-    out_img[lefty, leftx] = [255, 255, 255]
-    out_img[righty, rightx] = [255, 255, 255]
-    ploty_int = ploty.astype(int)
-    left_fitx_int = left_fitx.astype(int)
+    #out_img[left_pix_y, left_pix_x] = [255, 255, 255]
+    #out_img[right_pix_y, right_pix_x] = [255, 255, 255]
+    #ploty_int = poly_y.astype(int)
 
     #if all(0 <= left_fitx < out_img.shape[1] for item in left_fitx):
 
-    if not any(0 <= left_fitx) and not any( left_fitx > out_img.shape[1]):
-        out_img[ploty.astype(int), left_fitx.astype(int)-1] = [255,0,0]
-        out_img[ploty.astype(int), left_fitx.astype(int)] = [255, 0, 0]
-        out_img[ploty.astype(int), left_fitx.astype(int)+1] = [255, 0, 0]
+    if not any(0 <= poly_left_x) and not any( poly_left_x > out_img.shape[1]):
+        out_img[poly_y.astype(int), poly_left_x.astype(int)-1] = color
+        out_img[poly_y.astype(int), poly_left_x.astype(int)] = color
+        out_img[poly_y.astype(int), poly_left_x.astype(int)+1] = color
 
-    #if all(0 <= right_fitx < out_img.shape[1] for item in right_fitx):
+    #if all(0 <= poly_right_x < out_img.shape[1] for item in poly_right_x):
 
-    if not any(0 <= right_fitx) and not any( right_fitx > out_img.shape[1]):
-        out_img[ploty.astype(int), right_fitx.astype(int)-1] = [255,0,0]
-        out_img[ploty.astype(int), right_fitx.astype(int)] = [255,0,0]
-        out_img[ploty.astype(int), right_fitx.astype(int)+1] = [255,0,0]
+    if not any(0 <= poly_right_x) and not any( poly_right_x > out_img.shape[1]):
+        out_img[poly_y.astype(int), poly_right_x.astype(int)-1] = color
+        out_img[poly_y.astype(int), poly_right_x.astype(int)] = color
+        out_img[poly_y.astype(int), poly_right_x.astype(int)+1] = color
 
     # Plots the left and right polynomials on the lane lines
-    #plt.plot(left_fitx, ploty, color='yellow')
-    #plt.plot(right_fitx, ploty, color='yellow')
+    #plt.plot(poly_left_x, ploty, color='yellow')
+    #plt.plot(poly_right_x, ploty, color='yellow')
 
-    return out_img, ploty, left_fit, right_fit, left_fitx, right_fitx
+    return out_img
 
 
 ################ End detect lane pixels
@@ -427,8 +424,13 @@ def measure_curvature_real(leftx, lefty, rightx, righty):
     ym_per_pix = 30 / 720  # meters per pixel in y dimension
     xm_per_pix = 3.7 / 700  # meters per pixel in x dimension
 
-    left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+    try:
+        left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+        right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+    except TypeError:
+        return -1,-1
+
+
 
     # Define y-value where we want radius of curvature
     # We'll choose the maximum y-value, corresponding to the bottom of the image
@@ -446,7 +448,7 @@ def measure_curvature_real(leftx, lefty, rightx, righty):
 
 ################ 6. Warp the detected lane boundaries back onto the original image.
 
-def warp_back_to_original(warped, left_fitx, right_fitx, ploty, original_img, Minv):
+def draw_lane_and_warp_back_to_original(warped, left_fitx, right_fitx, ploty, original_img, Minv):
     # Create an image to draw the lines on
     warp_zero = np.zeros_like(warped).astype(np.uint8)
     color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
@@ -462,6 +464,7 @@ def warp_back_to_original(warped, left_fitx, right_fitx, ploty, original_img, Mi
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     newwarp = cv2.warpPerspective(color_warp, Minv, (original_img.shape[1], original_img.shape[0]))
     # Combine the result with the original image
+
     result = cv2.addWeighted(original_img, 1, newwarp, 0.3, 0)
     #plt.imshow(result)
 
@@ -493,10 +496,118 @@ class Line():
         #y values for detected line pixels
         self.ally = None
 
+        self.best_x = [np.array([False])]
+        self.best_coeffs = None
+        self.best_curverad = None
+
+
+
+
 class LaneDetectionPipeline():
     def __init__(self, on_video, show_imgs):
         self.on_video = on_video
         self.show_imgs = show_imgs
+        self.left_line = Line()
+        self.right_line = Line()
+        self.MAX_DEV_X = 50
+        self.MAX_HIST_LEN = 10
+
+        self.EXPECTED_LINE_DIST = 900
+        self.LINE_DIST_TOL = 90
+        self.subseq_not_detect = 0
+        self.MAX_SUBSEQ_NOT_DETECT = 10
+        self.hist_len = 0
+
+    def add_to_list_and_avg(self, line, fit_coeffs, poly_x, curverad):
+
+        if self.hist_len == 0:
+            line.best_x = poly_x
+            line.best_coeffs = fit_coeffs
+            line.best_curverad = curverad
+
+        elif self.hist_len < self.MAX_HIST_LEN:
+
+            # add current detection to line class
+            line.best_x = (line.best_x * self.hist_len + poly_x) / (self.hist_len + 1)
+            line.best_coeffs = (line.best_coeffs * self.hist_len + fit_coeffs) / (self.hist_len + 1)
+            line.best_curverad = (line.best_curverad * self.hist_len + curverad) / (self.hist_len + 1)
+
+        else:
+            line.best_coeffs = (line.best_coeffs * (self.hist_len - 1) + fit_coeffs) / self.hist_len
+            line.best_x = (line.best_x * (self.hist_len - 1) + poly_x) / self.hist_len
+            line.best_curverad = (line.best_curverad * (self.hist_len-1) + curverad) / self.hist_len
+
+    def check_lines(self, left_line, right_line, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y):
+
+        left_curverad, right_curverad = measure_curvature_real(left_pix_x, left_pix_y, right_pix_x, right_pix_y)
+
+        line_dist_between_begin = abs(poly_left_x[0] - poly_right_x[0])
+        line_dist_between_end = abs(poly_left_x[len(poly_right_x) - 1] - poly_right_x[len(poly_right_x) - 1])
+
+        if(not self.on_video):
+            print(
+                "Line dist begin:{}, end:{}".format(line_dist_between_begin, line_dist_between_end))
+            return left_curverad, right_curverad, poly_left_x, poly_right_x
+
+
+        ###if it is among the first n measurements:
+        if (self.hist_len < self.MAX_HIST_LEN):
+
+            # if the lines are close enough to each other
+            if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_between_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)\
+                    and (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_between_end < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL):
+                # add it to the list, and return the new average
+                self.add_to_list_and_avg(left_line, left_fit_coeffs, poly_left_x, left_curverad)
+                self.add_to_list_and_avg(right_line, right_fit_coeffs, poly_right_x, right_curverad)
+                self.hist_len = self.hist_len + 1
+                print("Filling detection history:{}/{}".format(self.hist_len, self.MAX_HIST_LEN))
+
+            else:
+                print("Line dist out of range:{} (must be {} +- {})".format(line_dist_between_begin, self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL))
+                ##return just the avg
+            return left_line.best_curverad, right_line.best_curverad, left_line.best_x, right_line.best_x
+
+        else:
+
+            line_dist_best_begin_left = abs(poly_left_x[0] - left_line.best_x[0])
+            line_dist_best_end_left = abs(poly_left_x[len(poly_left_x) - 1] - left_line.best_x[len(poly_left_x) - 1])
+
+            line_dist_best_begin_right = abs(poly_right_x[0] - right_line.best_x[0])
+            line_dist_best_end_right = abs(poly_right_x[len(poly_right_x) - 1] - right_line.best_x[len(poly_right_x) - 1])
+
+
+            # if the lines are close enough to each other and it is not too different from the previous detection
+            if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_between_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
+                    and line_dist_best_begin_left < self.MAX_DEV_X and line_dist_best_end_left < self.MAX_DEV_X \
+                    and line_dist_best_begin_right < self.MAX_DEV_X and line_dist_best_end_right < self.MAX_DEV_X:
+
+                self.subseq_not_detect = 0
+
+                # add it to the list, return the new average
+                self.add_to_list_and_avg(left_line, left_fit_coeffs, poly_left_x, left_curverad)
+                self.add_to_list_and_avg(right_line, right_fit_coeffs, poly_right_x, right_curverad)
+
+            else:
+                errstr = "At least one value out of tolerance:\n line_dist_between_begin:{} " + \
+                      " \n line_dist_best_begin_left:{} \n line_dist_best_end_left:{}" + \
+                      " \n line_dist_best_begin_right:{} \n line_dist_best_end_right:{}" + \
+                      "\n (EXPECTED_LINE_DIST: {}, LINE_DIST_TOL:{}, MAX_DEV_X:{})"
+
+                print(errstr.format(\
+                          line_dist_between_begin, line_dist_best_begin_left, \
+                          line_dist_best_end_left, line_dist_best_begin_right, \
+                          line_dist_best_end_right, self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL, self.MAX_DEV_X ))
+
+                self.subseq_not_detect = self.subseq_not_detect + 1
+
+                if self.subseq_not_detect >= self.MAX_SUBSEQ_NOT_DETECT:
+                    print("Resetting history because of {} bad detections".format(self.MAX_SUBSEQ_NOT_DETECT))
+                    self.subseq_not_detect = 0
+                    self.hist_len = 0
+
+            return left_line.best_curverad, right_line.best_curverad, left_line.best_x, right_line.best_x
+
+
 
     def pipeline(self, img):
 
@@ -518,22 +629,53 @@ class LaneDetectionPipeline():
         perspective_trans_img, M = perspective_transform(binary_img)
 
         #* 4. Detect lane pixels and fit to find the lane boundary.
-        leftx, lefty, rightx, righty, marked_img = find_lane_pixels(perspective_trans_img)
+        left_pix_x, left_pix_y, right_pix_x, right_pix_y, debug_img = find_lane_pixels(perspective_trans_img)
 
-        #throw exception if not found
-        warped_img_with_lanes, ploty, left_fit, right_fit, left_fitx, right_fitx = fit_polynomial(leftx, lefty, rightx, righty, marked_img)
+        #do various checks based on the return values of fit polynomial:
+        #1. was the line detected? depends if the coefficients are too far away from the last fit
+        #2. save average x values of fitted line
+
+        # Fit a second order polynomial to each using `np.polyfit`
+
+        try:
+            left_fit_coeffs = np.polyfit(left_pix_y, left_pix_x, 2)
+            right_fit_coeffs = np.polyfit(right_pix_y, right_pix_x, 2)
+        except TypeError:
+            left_fit_coeffs = [1, 1, 1]
+            right_fit_coeffs = [1, 1, 1]
+
+        poly_y, poly_left_x, poly_right_x =  generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_img)
+        #debug_img = plot_polygon_lines(poly_y, poly_left_x, poly_right_x, debug_img, [255,0,0])
+
+        opt_left_curverad, opt_right_curverad, opt_poly_left_x, opt_poly_right_x = \
+            self.check_lines(self.left_line, self.right_line, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y)
+
+        #poly_y, opt_poly_left_x, opt_poly_right_x =  generate_polygon_lines(opt_left_fit_coeffs, opt_right_fit_coeffs, perspective_trans_img)
+        debug_img = plot_polygon_lines(poly_y, opt_poly_left_x, opt_poly_right_x, debug_img, [0,0,255])
 
         #* 5. Determine the curvature of the lane and vehicle position with respect to center.
         #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
-        left_curverad, right_curverad = measure_curvature_real(leftx, lefty, rightx, righty)
+        #left_curverad, right_curverad = measure_curvature_real(left_pix_x, left_pix_y, right_pix_x, right_pix_y)
 
         Minv = np.linalg.inv(M)
 
         #* 6. Warp the detected lane boundaries back onto the original image.
-        final_img = warp_back_to_original(perspective_trans_img, left_fitx, right_fitx, ploty, undistorted_img, Minv)
+        final_img = draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
 
-        #* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-        print("Left curverad: {}, right curverad: {}".format(left_curverad, right_curverad))
+        strToPlot = "Avg curve: {}".format((opt_left_curverad + opt_right_curverad)/2)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        bottomLeftCornerOfText = (50, 50)
+        fontScale = 1
+        fontColor = (255, 0, 0)
+        lineType = 2
+
+        cv2.putText(final_img, strToPlot,
+                    bottomLeftCornerOfText,
+                    font,
+                    fontScale,
+                    fontColor,
+                    lineType)
 
         if self.show_imgs:
 
@@ -557,7 +699,7 @@ class LaneDetectionPipeline():
             p2.set_title(('Perspective Transform'))
 
             p2 = plt.subplot(2, 3, 5)
-            p2.imshow(warped_img_with_lanes)
+            p2.imshow(debug_img)
             p2.set_title(('Detected Lane Pixels'))
 
             p2 = plt.subplot(2, 3, 6)
@@ -606,13 +748,15 @@ def pipeline_on_video():
     ## Where start_second and end_second are integer values representing the start and end of the subclip
     ## You may also uncomment the following line for a subclip of the first 5 seconds
     ##clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
+    #clip1 = VideoFileClip("project_video.mp4").subclip(0,10)
     clip1 = VideoFileClip("project_video.mp4")
+
     white_clip = clip1.fl_image(process_image)  # NOTE: this function expects color images!!
     #% time white_clip.write_videofile(white_output, audio=False)
     white_clip.write_videofile(white_output, audio=False)
 
     return
 
-pipeline_on_video()
-#pipeline_on_images()
+#pipeline_on_video()
+pipeline_on_images()
 #determine_perspective_transform_matrix()
