@@ -220,9 +220,9 @@ def create_binary_image(initial_image):
 
 def determine_perspective_transform_matrix():
 
-    #img = mpimg.imread("test_images_undistorted/straight_lines1.jpg")
-    #plt.imshow(img)
-    #plt.show()
+    img = mpimg.imread("test_images_undistorted/straight_lines1.jpg")
+    plt.imshow(img)
+    plt.show()
 
     #img_size = (img.shape[1], img.shape[0])
 
@@ -233,7 +233,23 @@ def determine_perspective_transform_matrix():
     #src = np.float32([[203,719],[537,491], [1091, 717], [749, 492]])
     #dst = np.float32([[203,719],[203,191], [1091, 717], [1091, 192]])
 
-    src = np.float32([[203, 719], [580, 457], [1091, 717], [697, 457]])
+    #rad ca. 290
+    #src = np.float32([[203, 719], [580, 457], [1091, 717], [697, 457]])
+    #dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
+
+    #rad ca. 1500
+    #src = np.float32([[203, 719], [537, 490], [1091, 717], [747, 490]])
+    #dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
+
+    #rad ca. 800
+    #src = np.float32([[203, 719], [560, 473], [1091, 717], [723, 473]])
+    #dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
+
+    #rad ca. 890
+    #src = np.float32([[203, 719], [554, 477], [1091, 717], [726, 477]])
+    #dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
+
+    src = np.float32([[203, 719], [550, 480], [1091, 717], [733, 480]])
     dst = np.float32([[203, 719], [193, 100], [1091, 717], [1101, 100]])
 
     # For destination points, I'm arbitrarily choosing some points to be
@@ -510,6 +526,7 @@ class LaneDetectionPipeline():
         self.left_line = Line()
         self.right_line = Line()
         self.MAX_DEV_X = 50
+        self.MAX_DEV_CURVE = 3000
         self.MAX_HIST_LEN = 10
 
         self.EXPECTED_LINE_DIST = 900
@@ -575,11 +592,15 @@ class LaneDetectionPipeline():
             line_dist_best_begin_right = abs(poly_right_x[0] - right_line.best_x[0])
             line_dist_best_end_right = abs(poly_right_x[len(poly_right_x) - 1] - right_line.best_x[len(poly_right_x) - 1])
 
+            curverad_delta_left = abs(left_curverad - left_line.best_curverad);
+            curverad_delta_right = abs(right_curverad - right_line.best_curverad);
 
             # if the lines are close enough to each other and it is not too different from the previous detection
             if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_between_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
                     and line_dist_best_begin_left < self.MAX_DEV_X and line_dist_best_end_left < self.MAX_DEV_X \
-                    and line_dist_best_begin_right < self.MAX_DEV_X and line_dist_best_end_right < self.MAX_DEV_X:
+                    and line_dist_best_begin_right < self.MAX_DEV_X and line_dist_best_end_right < self.MAX_DEV_X \
+                    and curverad_delta_left < self.MAX_DEV_CURVE \
+                    and curverad_delta_right < self.MAX_DEV_CURVE:
 
                 self.subseq_not_detect = 0
 
@@ -591,12 +612,14 @@ class LaneDetectionPipeline():
                 errstr = "At least one value out of tolerance:\n line_dist_between_begin:{} " + \
                       " \n line_dist_best_begin_left:{} \n line_dist_best_end_left:{}" + \
                       " \n line_dist_best_begin_right:{} \n line_dist_best_end_right:{}" + \
-                      "\n (EXPECTED_LINE_DIST: {}, LINE_DIST_TOL:{}, MAX_DEV_X:{})"
+                      " \n curverad_delta_right:{}, curverad_delta_left:{}" + \
+                      " \n (EXPECTED_LINE_DIST: {}, LINE_DIST_TOL:{}, MAX_DEV_X:{}, MAX_DEV_CURVE:{})"
 
                 print(errstr.format(\
                           line_dist_between_begin, line_dist_best_begin_left, \
                           line_dist_best_end_left, line_dist_best_begin_right, \
-                          line_dist_best_end_right, self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL, self.MAX_DEV_X ))
+                          line_dist_best_end_right, curverad_delta_right, curverad_delta_left, \
+                            self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL, self.MAX_DEV_X, self.MAX_DEV_CURVE ))
 
                 self.subseq_not_detect = self.subseq_not_detect + 1
 
@@ -662,7 +685,7 @@ class LaneDetectionPipeline():
         #* 6. Warp the detected lane boundaries back onto the original image.
         final_img = draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
 
-        strToPlot = "Avg curve: {}".format((opt_left_curverad + opt_right_curverad)/2)
+        strToPlot = "Left curve: {}, right curve: {}".format(opt_left_curverad, opt_right_curverad)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         bottomLeftCornerOfText = (50, 50)
@@ -726,6 +749,13 @@ def pipeline_on_images():
 
     return
 
+def pipeline_on_single_image(filename):
+
+    p = LaneDetectionPipeline(False, True)
+    image = mpimg.imread("test_images/" + filename)
+    final_image = p.pipeline(image)
+    cv2.imwrite('output_images/' + filename, final_image)
+
 
 def pipeline_on_video():
     # Import everything needed to edit/save/watch video clips
@@ -748,8 +778,8 @@ def pipeline_on_video():
     ## Where start_second and end_second are integer values representing the start and end of the subclip
     ## You may also uncomment the following line for a subclip of the first 5 seconds
     ##clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
-    #clip1 = VideoFileClip("project_video.mp4").subclip(0,10)
     clip1 = VideoFileClip("project_video.mp4")
+    #clip1 = VideoFileClip("project_video.mp4")
 
     white_clip = clip1.fl_image(process_image)  # NOTE: this function expects color images!!
     #% time white_clip.write_videofile(white_output, audio=False)
@@ -757,6 +787,8 @@ def pipeline_on_video():
 
     return
 
-#pipeline_on_video()
-pipeline_on_images()
+pipeline_on_video()
+#pipeline_on_images()
+#pipeline_on_single_image("straight_lines1.jpg")
+#pipeline_on_single_image("test2.jpg")
 #determine_perspective_transform_matrix()
