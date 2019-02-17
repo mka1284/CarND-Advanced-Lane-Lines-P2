@@ -394,14 +394,14 @@ def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,
 
     #if all(0 <= left_fitx < out_img.shape[1] for item in left_fitx):
 
-    if not any(0 <= poly_left_x) and not any( poly_left_x > out_img.shape[1]):
+    if not any(0 > poly_left_x) and not any( poly_left_x > out_img.shape[1]):
         out_img[poly_y.astype(int), poly_left_x.astype(int)-1] = color
         out_img[poly_y.astype(int), poly_left_x.astype(int)] = color
         out_img[poly_y.astype(int), poly_left_x.astype(int)+1] = color
 
     #if all(0 <= poly_right_x < out_img.shape[1] for item in poly_right_x):
 
-    if not any(0 <= poly_right_x) and not any( poly_right_x > out_img.shape[1]):
+    if not any(0 > poly_right_x) and not any( poly_right_x > out_img.shape[1]):
         out_img[poly_y.astype(int), poly_right_x.astype(int)-1] = color
         out_img[poly_y.astype(int), poly_right_x.astype(int)] = color
         out_img[poly_y.astype(int), poly_right_x.astype(int)+1] = color
@@ -461,6 +461,62 @@ def measure_curvature_real(leftx, lefty, rightx, righty):
     return left_curverad, right_curverad
 
 ################ End Determination of curvature
+
+
+
+def determine_vehicle_pos(left_line_start, right_line_start):
+    '''
+    Calculates the devation of the vehicle center in meters.
+    '''
+
+    LEFT_LINE_ZERO = 203
+    RIGHT_LINE_ZERO = 1091
+    PIXELS2METERS = 3.7/700
+
+    ideal_pos = LEFT_LINE_ZERO + (RIGHT_LINE_ZERO - LEFT_LINE_ZERO)/2
+    true_pos = left_line_start + (right_line_start - left_line_start)/2
+
+    diff_pix = ideal_pos - true_pos
+    diff_meters = diff_pix * PIXELS2METERS
+
+    return diff_meters
+
+
+
+    # Define y-value where we want radius of curvature
+    # We'll choose the maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(lefty)
+
+    # Calculation of R_curve (radius of curvature)
+    left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
+        2 * left_fit_cr[0])
+    right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
+        2 * right_fit_cr[0])
+
+    return left_curverad, right_curverad
+
+
+def write_info(img, left_curve, right_curve, vehicle_pos):
+
+    avg_curve = (left_curve + right_curve) / 2
+    #### write curvature on image
+    strToPlot = "Curve: {0:.2f} (L:{1:.2f}, R:{2:.2f}), x-Pos: {3:.3f}".format(avg_curve, left_curve, right_curve, vehicle_pos)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    bottomLeftCornerOfText = (50, 50)
+    fontScale = 1
+    fontColor = (255, 255, 255)
+    lineType = 2
+
+    cv2.putText(img, strToPlot,
+                bottomLeftCornerOfText,
+                font,
+                fontScale,
+                fontColor,
+                lineType)
+
+    return img
+
 
 ################ 6. Warp the detected lane boundaries back onto the original image.
 
@@ -527,7 +583,7 @@ class LaneDetectionPipeline():
         self.right_line = Line()
         self.MAX_DEV_X = 50
         self.MAX_DEV_CURVE = 3000
-        self.MAX_HIST_LEN = 10
+        self.MAX_HIST_LEN = 15
 
         self.EXPECTED_LINE_DIST = 900
         self.LINE_DIST_TOL = 90
@@ -685,20 +741,11 @@ class LaneDetectionPipeline():
         #* 6. Warp the detected lane boundaries back onto the original image.
         final_img = draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
 
-        strToPlot = "Left curve: {}, right curve: {}".format(opt_left_curverad, opt_right_curverad)
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        bottomLeftCornerOfText = (50, 50)
-        fontScale = 1
-        fontColor = (255, 0, 0)
-        lineType = 2
+        ## calculate vehicle position
+        vehicle_pos = determine_vehicle_pos(opt_poly_left_x[len(opt_poly_left_x) - 1], opt_poly_right_x[len(opt_poly_right_x) - 1])
 
-        cv2.putText(final_img, strToPlot,
-                    bottomLeftCornerOfText,
-                    font,
-                    fontScale,
-                    fontColor,
-                    lineType)
+        final_img = write_info(final_img, opt_left_curverad, opt_right_curverad, vehicle_pos)
 
         if self.show_imgs:
 
@@ -787,8 +834,8 @@ def pipeline_on_video():
 
     return
 
-pipeline_on_video()
-#pipeline_on_images()
+#pipeline_on_video()
+pipeline_on_images()
 #pipeline_on_single_image("straight_lines1.jpg")
 #pipeline_on_single_image("test2.jpg")
 #determine_perspective_transform_matrix()
