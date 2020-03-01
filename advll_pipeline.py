@@ -10,29 +10,35 @@ import advll_helpers
 #A class to receive the characteristics of each line detection
 class Line():
     def __init__(self):
-        self.x = [np.array([False])]
-        self.coeffs = None
-        self.curverad = None
-        self.logfile = None
-
+        self.x = [np.array([False])] #The x-values of the pixels of the lane
+        self.coeffs = None #The polynomial coefficients of the lane
+        self.curverad = None #The radius of lane in meters
+        #self.logfile = None
 
 class LaneDetectionPipeline():
-    def __init__(self, on_video, show_imgs):
-        self.on_video = on_video
-        self.show_imgs = show_imgs
+    """
+    This class represents the pipeline with averaging/filtering capabilities.
+    """
+
+    def __init__(self, on_video, show_intermediate_imgs, attach_polynom_img):
+        self.on_video = on_video #Whether the pipeline is running on a video
+        self.show_imgs = show_intermediate_imgs #Whether debug images afer each step are shown
+        self.attach_polynom_img = attach_polynom_img #Whether the polynom debug image should be attached to the output image
         self.left_line = Line()
         self.right_line = Line()
-        self.MAX_DEV_X_STEP = 80
+        self.MAX_DEV_X_STEP = 80 #The maximum deviation of the x position of the lane from the average
         #self.MAX_DEV_CURVE_STEP = 100000
-        self.MAX_DEV_CURVE_QUOT = 4
-        self.MAX_CURVERAD = 10000
-        self.MAX_HIST_LEN = 20
+        self.MAX_DEV_CURVE_QUOT = 4 #The maximum deviation of the quotient of the current curve from the average
+        self.MAX_CURVERAD = 10000 #The maximum curve radius
 
-        self.EXPECTED_LINE_DIST = 900
-        self.LINE_DIST_TOL = 200
-        self.subseq_not_detect = 0
-        self.MAX_SUBSEQ_NOT_DETECT = 10
-        self.hist_len = 0
+        self.MAX_HIST_LEN = 20 #The length of the detection history
+        self.hist_len = 0 #The current length of the history
+
+        self.EXPECTED_LINE_DIST = 900 #The expected distance of the lanes
+        self.LINE_DIST_TOL = 200 #The tolerance of the lane distance
+
+        self.MAX_SUBSEQ_NOT_DETECT = 10 #The number of times a detection may fail
+        self.subseq_not_detect = 0 #The number of times a detection has failed
 
         self.logfile = open("logs.txt", "w")
 
@@ -40,30 +46,18 @@ class LaneDetectionPipeline():
         print(text)
         self.logfile.write(text + "\n")
 
-    def write_info(self, img, left_curve, right_curve, vehicle_pos):
-
-        avg_curve = (left_curve + right_curve) / 2
-        #### write curvature on image
-        strToPlot = "Curve: {0:.2f} (L:{1:.2f}, R:{2:.2f}), x-Pos: {3:.3f}".format(avg_curve, left_curve, right_curve,
-                                                                                   vehicle_pos)
-        self.logfile.write(strToPlot + "\n")
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        bottomLeftCornerOfText = (50, 50)
-        fontScale = 1
-        fontColor = (255, 255, 255)
-        lineType = 2
-
-        cv2.putText(img, strToPlot,
-                    bottomLeftCornerOfText,
-                    font,
-                    fontScale,
-                    fontColor,
-                    lineType)
-
-        return img
-
 
     def add_to_list_and_avg(self, line, fit_coeffs, poly_x, curverad):
+        """
+        Add the data to the saved average.
+
+        :param line:
+        :param fit_coeffs:
+        :param poly_x:
+        :param curverad:
+        :return:
+        """
+
         if self.hist_len == 0:
             line.x = poly_x
             line.coeffs = fit_coeffs
@@ -80,6 +74,7 @@ class LaneDetectionPipeline():
             line.coeffs = (line.coeffs * (self.hist_len - 1) + fit_coeffs) / self.hist_len
             line.x = (line.x * (self.hist_len - 1) + poly_x) / self.hist_len
             line.curverad = (line.curverad * (self.hist_len-1) + curverad) / self.hist_len
+
 
     def check_lines(self, left_line, right_line, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y):
 
@@ -118,6 +113,7 @@ class LaneDetectionPipeline():
 
             else:
                 self.log("Line dist end out of range:{} (must be {} +- {})".format(line_dist_abs_end, self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL))
+
             return left_line.curverad, right_line.curverad, left_line.x, right_line.x
 
         else:
@@ -263,21 +259,16 @@ class LaneDetectionPipeline():
         Minv = np.linalg.inv(transformMatrix)
 
         #* 6. Warp the detected lane boundaries back onto the original image.
-        #final_img = advll_helpers.draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
-        final_img = debug_img;
+        final_img = advll_helpers.draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
 
         ## calculate vehicle position
         vehicle_pos = advll_helpers.determine_vehicle_pos(opt_poly_left_x[len(opt_poly_left_x) - 1], opt_poly_right_x[len(opt_poly_right_x) - 1])
-        final_img = self.write_info(final_img, opt_left_curverad, opt_right_curverad, vehicle_pos)
+        final_img = advll_helpers.print_info_on_img(self.logfile, final_img, opt_left_curverad, opt_right_curverad, vehicle_pos)
 
-
-#white_yellow_image, gray_image, blurred_image, canny_image, cut_image, binary_img
+        if self.attach_polynom_img:
+            final_img = np.concatenate((final_img, debug_img), axis=1)
 
         if self.show_imgs:
-
-            #plt.imshow(debug_img)
-            #plt.show()
-
             f = plt.figure(figsize=(19, 8))
             plt.tight_layout()
 
@@ -300,10 +291,6 @@ class LaneDetectionPipeline():
             p2 = plt.subplot(2, 4, 5)
             p2.imshow(binary_img, cmap='gray')
             p2.set_title(('Binary Image'))
-
-            #p2 = plt.subplot(2, 3, 4)
-            #p2.imshow(perspective_trans_img, cmap='gray')
-            #p2.set_title(('Perspective Transform'))
 
             p2 = plt.subplot(2, 4, 6)
             p2.imshow(debug_img)
@@ -335,7 +322,7 @@ def pipeline_on_images():
 
 def pipeline_on_single_image(filename):
 
-    p = LaneDetectionPipeline(False, True)
+    p = LaneDetectionPipeline(False, True, False)
     image = mpimg.imread("test_images/" + filename)
     final_image = p.pipeline(image)
     cv2.imwrite('output_images/' + filename, final_image)
@@ -346,7 +333,7 @@ def pipeline_on_video():
     from moviepy.editor import VideoFileClip
     #from IPython.display import HTML
 
-    p = LaneDetectionPipeline(True, False)
+    p = LaneDetectionPipeline(True, False, True)
 
     def process_image(image):
         result = p.pipeline(image)

@@ -174,9 +174,13 @@ def region_of_interest(img, vertices):
 
 def cut_area(img):
     """
-    Makes black everything laying outside of the desired area
+    Makes black everything outside of the area of interest.
+
+    :param img: the image that will be cut
+    :return: the cut image
     """
-    # pts – Array of polygons where each polygon is represented as an array of points.
+
+
     vertices = np.array([[(100, 700), (650, 400), (1200, 700)]], dtype=np.int32)
     masked_image = region_of_interest(img, vertices)
 
@@ -184,6 +188,12 @@ def cut_area(img):
 
 
 def create_binary_image(initial_image):
+    """
+    Applies various filters on the given image
+    :param initial_image: the image to apply the filters on
+    :return: the filtered images
+    """
+
     #plt.imshow(initial_image)
     #plt.title('original image')
 
@@ -231,6 +241,14 @@ def create_binary_image(initial_image):
 ################### Perspective Transform
 
 def determine_perspective_transform_matrix():
+    """
+    Determines the perspective transform matrix.
+
+    Figures with the original and transformed image are opened in order
+    to easily change the transformation parameters.
+
+    :return: The perspective transformation matrix
+    """
 
     img = mpimg.imread("test_images_undistorted/straight_lines1.jpg")
     plt.imshow(img)
@@ -259,6 +277,14 @@ def determine_perspective_transform_matrix():
     return M
 
 def perspective_transform(img):
+    """
+    Applies the perspective transformation to the image. If the pickle file
+    does not exist, the transformation is determined first and saved in the
+    pickle file.
+
+    :param img: The image to be transformed
+    :return: The warped/transformed image and the transformation Matrix
+    """
 
     if not os.path.isfile('M_pickle.p'):
         M = determine_perspective_transform_matrix()
@@ -276,10 +302,19 @@ def perspective_transform(img):
 ################# Detection of Lane Pixels And Polygon Generation
 
 def find_lane_pixels(binary_warped):
+    """
+    Find the pixels that are part of the image.
+
+    :param binary_warped: the binary warped image
+    :return: The x and y coordinates of the lane pixels and a visualization image
+    """
+
     # Take a histogram of the bottom half of the image
     histogram = np.sum(binary_warped[binary_warped.shape[0] // 2:, :], axis=0)
+
     # Create an output image to draw on and visualize the result
     out_img = np.dstack((binary_warped, binary_warped, binary_warped))
+
     # Find the peak of the left and right halves of the histogram
     # These will be the starting point for the left and right lines
     midpoint = np.int(histogram.shape[0] // 2)
@@ -296,10 +331,12 @@ def find_lane_pixels(binary_warped):
 
     # Set height of windows - based on nwindows above and image shape
     window_height = np.int(binary_warped.shape[0] // nwindows)
+
     # Identify the x and y positions of all nonzero pixels in the image
     nonzero = binary_warped.nonzero()
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
+
     # Current positions to be updated later for each window in nwindows
     leftx_current = leftx_base
     rightx_current = rightx_base
@@ -357,6 +394,14 @@ def find_lane_pixels(binary_warped):
     return leftx, lefty, rightx, righty, out_img
 
 def generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_img):
+    """
+    Generates the polygon lines based on the polynom coefficients
+
+    :param left_fit_coeffs:
+    :param right_fit_coeffs:
+    :param perspective_trans_img:
+    :return: polygon line coefficients
+    """
 
     poly_y = np.linspace(0, perspective_trans_img.shape[0] - 1, perspective_trans_img.shape[0])
 
@@ -375,6 +420,16 @@ def generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_
 
 
 def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,0]):
+    """
+    Plots the polygon lines on the image.
+
+    :param poly_y:
+    :param poly_left_x:
+    :param poly_right_x:
+    :param out_img:
+    :param color:
+    :return: The image with the lines drawn on it
+    """
 
     if not any(0 > poly_left_x) and not any( poly_left_x > out_img.shape[1]-1):
         out_img[poly_y.astype(int), poly_left_x.astype(int)-1] = color
@@ -386,20 +441,24 @@ def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,
         out_img[poly_y.astype(int), poly_right_x.astype(int)] = color
         out_img[poly_y.astype(int), poly_right_x.astype(int)+1] = color
 
-    # Plots the left and right polynomials on the lane lines
-    #plt.plot(poly_left_x, ploty, color='yellow')
-    #plt.plot(poly_right_x, ploty, color='yellow')
-
     return out_img
 
 
 
 ################ Curvature And Vehicle Position Determination
 
-def measure_curvature_pixels(ploty, left_fit, right_fit, xm_per_pix, ym_per_pix):
-    '''
-    Calculates the curvature of polynomial functions in pixels.
-    '''
+def measure_curvature_pixels(ploty, left_fit, right_fit):
+    """
+    Calculate the curvature of lanes in pixels
+
+    :param ploty: the y values of the polynom
+    :param left_fit: the polynom coefficients of the left polynom
+    :param right_fit: the polynom coefficients of the right polynom
+    :param xm_per_pix: the density of pixels in x direction
+    :param ym_per_pix: the density of pixels in the y direction
+    :return: the curvature of both lanes
+    """
+
     # Define y-value where we want radius of curvature
     # We'll choose the maximum y-value, corresponding to the bottom of the image
     y_eval = np.max(ploty)
@@ -411,9 +470,16 @@ def measure_curvature_pixels(ploty, left_fit, right_fit, xm_per_pix, ym_per_pix)
     return left_curverad, right_curverad
 
 def measure_curvature_real(leftx, lefty, rightx, righty):
-    '''
-    Calculates the curvature of polynomial functions in meters.
-    '''
+    """
+    Calculate the curvature of lanes in meters
+
+    :param leftx: the x coordinates of the left lane
+    :param lefty: the y coordinates of the left lane
+    :param rightx: the x coordinates of the right lane
+    :param righty: the y coordinates of teh right lane
+    :return: the radians of the lanes in meters
+    """
+
     # Define conversions in x and y from pixels space to meters
     ym_per_pix = 30 / 720  # meters per pixel in y dimension
     #xm_per_pix = 3.7 / 700  # meters per pixel in x dimension
@@ -439,13 +505,17 @@ def measure_curvature_real(leftx, lefty, rightx, righty):
 
 
 def determine_vehicle_pos(left_line_start, right_line_start):
-    '''
-    Calculates the devation of the vehicle center in meters.
-    '''
+    """
+    Calculates the deviation of the vehicle center in meters.
+
+    :param left_line_start: The current position of the left lane
+    :param right_line_start: The current position of the right lane
+    :return: The vehicle position relative to the lines
+    """
 
     LEFT_LINE_ZERO = 203
     RIGHT_LINE_ZERO = 1091
-    PIXELS2METERS = 3.7/700
+    PIXELS2METERS = 1.33 / 700
 
     ideal_pos = LEFT_LINE_ZERO + (RIGHT_LINE_ZERO - LEFT_LINE_ZERO)/2
     true_pos = left_line_start + (right_line_start - left_line_start)/2
@@ -456,23 +526,21 @@ def determine_vehicle_pos(left_line_start, right_line_start):
     return diff_meters
 
 
-
-    # Define y-value where we want radius of curvature
-    # We'll choose the maximum y-value, corresponding to the bottom of the image
-    y_eval = np.max(lefty)
-
-    # Calculation of R_curve (radius of curvature)
-    left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
-        2 * left_fit_cr[0])
-    right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
-        2 * right_fit_cr[0])
-
-    return left_curverad, right_curverad
-
-
 ################ Unwarping
 
 def draw_lane_and_warp_back_to_original(warped, left_fitx, right_fitx, ploty, original_img, Minv):
+    """
+    Draw the drivable area on the image
+
+    :param warped: the warped image
+    :param left_fitx: the x coordinates of the left lane pixels
+    :param right_fitx: the x coordinates of the right lane pixels
+    :param ploty: the y coordinates of the lane pixels
+    :param original_img: the original image
+    :param Minv: the inverse matrix for warping
+    :return: the combined, unwarped image
+    """
+
     # Create an image to draw the lines on
     warp_zero = np.zeros_like(warped).astype(np.uint8)
     color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
@@ -487,10 +555,41 @@ def draw_lane_and_warp_back_to_original(warped, left_fitx, right_fitx, ploty, or
 
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     newwarp = cv2.warpPerspective(color_warp, Minv, (original_img.shape[1], original_img.shape[0]))
-    # Combine the result with the original image
 
+    # Combine the result with the original image
     result = cv2.addWeighted(original_img, 1, newwarp, 0.3, 0)
     #plt.imshow(result)
 
     return result
 
+def print_info_on_img(logfile, img, left_curve, right_curve, vehicle_pos):
+    """
+    Print the info on the image and also writes it to a logfile
+
+    :param logfile:
+    :param img:
+    :param left_curve:
+    :param right_curve:
+    :param vehicle_pos:
+    :return:
+    """
+
+    avg_curve = (left_curve + right_curve) / 2
+    #### write curvature on image
+    strToPlot = "Curve: {0:.2f} (L:{1:.2f}, R:{2:.2f}), x-Pos: {3:.3f}".format(avg_curve, left_curve, right_curve,
+                                                                               vehicle_pos)
+    logfile.write(strToPlot + "\n")
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    bottomLeftCornerOfText = (50, 50)
+    fontScale = 1
+    fontColor = (255, 255, 255)
+    lineType = 2
+
+    cv2.putText(img, strToPlot,
+                bottomLeftCornerOfText,
+                font,
+                fontScale,
+                fontColor,
+                lineType)
+
+    return img
