@@ -48,19 +48,6 @@ def compute_calib_from_chessboards(nx, ny, filename_pattern):
             objpoints.append(objp)
             imgpoints.append(corners)
 
-            # Draw and display the corners
-            #cv2.drawChessboardCorners(img, (nx, ny), corners, ret)
-            # write_name = 'corners_found'+str(idx)+'.jpg'
-            # cv2.imwrite(write_name, img)
-
-            #cv2.imshow('img', img)
-            #cv2.show()
-            #cv2.waitKey(500)
-            #plt.imshow(img)
-            #plt.show()
-            #plt.waitforbuttonpress()
-
-            #plt.close('all')
         else:
             print("warning: chessboard corners not found in file " + fname)
 
@@ -94,9 +81,6 @@ def correct_imgs_in_folder(mtx, dist, rvecs, tvec, folder):
         image = cv2.imread(folder + "/" + filename)
         undistorted = cv2.undistort(image, mtx, dist, None, mtx)
 
-        #plt.figure()
-        #plt.imshow(final_img)
-        #plt.title(filename)
         cv2.imwrite(folder + '_undistorted/' + filename, undistorted)
 
     return
@@ -194,53 +178,19 @@ def create_binary_image(initial_image):
     :return: the filtered images
     """
 
-    #plt.imshow(initial_image)
-    #plt.title('original image')
-
-    #white_masked = initial_image
     white_yellow_masked = white_yellow_mask(initial_image)
-    #plt.figure()
-    #plt.imshow(white_masked)
-    #plt.title('white mask')
-
     gray_image = grayscale(white_yellow_masked)
-    #plt.figure()
-    #plt.imshow(gray_image, cmap='gray')
-    #plt.title('grayscale')
-
-    #blurred_image = gaussian_blur(gray_image, 5)
-    #plt.figure()
-    #plt.imshow(blurred_image, cmap='gray')
-    #plt.title('gaussian_blur')
-
-    #canny_image = canny(blurred_image, 50, 150)
-    #plt.figure()
-    #plt.imshow(canny_image, cmap='gray')
-    #plt.title('canny')
-
     cut_image = cut_area(gray_image)
-    # plt.figure()
-    # plt.imshow(cut_image, cmap='gray')
-    # plt.title('cut image')
 
-    #hough_image, lines = hough_trans(canny_image)
-    # plt.figure()
-    # plt.imshow(hough_image)
-    # plt.title('hough image')
 
     s_thresh_min = 100
     s_thresh_max = 255
     binary_img = np.zeros_like(cut_image)
     binary_img[(cut_image >= s_thresh_min) & (cut_image <= s_thresh_max)] = 255
 
-    #return white_yellow_masked, gray_image, blurred_image, canny_image, cut_image, binary_img
-
-
     plt.figure()
     plt.imshow(binary_img, cmap='gray')
     plt.title('binary_img')
-
-    #cv2.imwrite('output_images/straight_lines1_binary2.png', binary_img)
 
     return white_yellow_masked, gray_image, gray_image, gray_image, cut_image, binary_img
 
@@ -263,14 +213,6 @@ def determine_perspective_transform_matrix():
     plt.show()
 
     img_size = (img.shape[1], img.shape[0])
-
-    #good
-    #src = np.float32([[203, 719], [550, 480], [1091, 717], [733, 480]])
-    #dst = np.float32([[203, 719], [190, 100], [1091, 717], [1102, 100]])
-
-    #too much
-    #src = np.float32([[203, 719], [600, 446], [1091, 717], [676, 446]])
-    #dst = np.float32([[203, 719], [203, 0], [1091, 717], [1091, 0]])
 
     src = np.float32([[203, 719], [580, 460], [1091, 717], [702, 460]])
     dst = np.float32([[203, 719], [203, 100], [1091, 717], [1091, 100]])

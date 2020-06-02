@@ -258,21 +258,22 @@ class LaneDetectionPipeline():
             left_fit_coeffs = [1, 1, 1]
             right_fit_coeffs = [1, 1, 1]
 
+        #* 5. Fit polynoms.
         poly_y, poly_left_x, poly_right_x =  advll_helpers.generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_img)
         debug_img = advll_helpers.plot_polygon_lines(poly_y, poly_left_x, poly_right_x, debug_img, [255, 0, 0])
 
+        # 6. Process the line data and discard crappy data
         opt_left_curverad, opt_right_curverad, opt_poly_left_x, opt_poly_right_x = \
             self.process_new_line_data(left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y)
 
-        #poly_y, opt_poly_left_x, opt_poly_right_x =  generate_polygon_lines(opt_left_fit_coeffs, opt_right_fit_coeffs, perspective_trans_img)
         debug_img = advll_helpers.plot_polygon_lines(poly_y, opt_poly_left_x, opt_poly_right_x, debug_img, [0, 0, 255])
 
         Minv = np.linalg.inv(transformMatrix)
 
-        #* 6. Warp the detected lane boundaries back onto the original image.
+        #* 7. Warp the detected lane boundaries back onto the original image.
         final_img = advll_helpers.draw_lane_and_warp_back_to_original(perspective_trans_img, opt_poly_left_x, opt_poly_right_x, poly_y, undistorted_img, Minv)
 
-        ## calculate vehicle position
+        ## 8. Calculate vehicle position
         vehicle_pos = advll_helpers.determine_vehicle_pos(opt_poly_left_x[len(opt_poly_left_x) - 1], opt_poly_right_x[len(opt_poly_right_x) - 1])
         final_img = advll_helpers.print_info_on_img(self.logfile, final_img, opt_left_curverad, opt_right_curverad, vehicle_pos)
 
@@ -318,11 +319,8 @@ def pipeline_on_video():
         result = p.pipeline(image)
         return result
 
-    #white_output = 'project_video_output.mp4'
 
     white_output = 'project_video_output.mp4'
-
-    #clip1 = VideoFileClip("project_video.mp4").subclip(0,20)
     clip1 = VideoFileClip("project_video.mp4")
 
     white_clip = clip1.fl_image(process_image)
