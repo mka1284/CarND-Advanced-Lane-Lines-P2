@@ -234,6 +234,14 @@ def create_binary_image(initial_image):
     binary_img[(cut_image >= s_thresh_min) & (cut_image <= s_thresh_max)] = 255
 
     #return white_yellow_masked, gray_image, blurred_image, canny_image, cut_image, binary_img
+
+
+    plt.figure()
+    plt.imshow(binary_img, cmap='gray')
+    plt.title('binary_img')
+
+    #cv2.imwrite('output_images/straight_lines1_binary2.png', binary_img)
+
     return white_yellow_masked, gray_image, gray_image, gray_image, cut_image, binary_img
 
 
@@ -270,6 +278,8 @@ def determine_perspective_transform_matrix():
     # Given src and dst points, calculate the perspective transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(img, M, img_size)
+
+    #cv2.imwrite('output_images/straight_lines1_transformed2.png', warped)
 
     plt.imshow(warped)
     plt.show()
@@ -393,6 +403,7 @@ def find_lane_pixels(binary_warped):
 
     return leftx, lefty, rightx, righty, out_img
 
+
 def generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_img):
     """
     Generates the polygon lines based on the polynom coefficients
@@ -418,7 +429,6 @@ def generate_polygon_lines(left_fit_coeffs, right_fit_coeffs, perspective_trans_
     return poly_y, poly_left_x, poly_right_x
 
 
-
 def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,0]):
     """
     Plots the polygon lines on the image.
@@ -442,7 +452,6 @@ def plot_polygon_lines(poly_y, poly_left_x, poly_right_x, out_img, color=[255,0,
         out_img[poly_y.astype(int), poly_right_x.astype(int)+1] = color
 
     return out_img
-
 
 
 ################ Curvature And Vehicle Position Determination
@@ -593,3 +602,54 @@ def print_info_on_img(logfile, img, left_curve, right_curve, vehicle_pos):
                 lineType)
 
     return img
+
+def show_imgs(original_img, undistorted_img, white_yellow_img, canny_img, binary_img, debug_img, final_img):
+    """
+    Show the given images in a figure.
+
+    :param original_img:
+    :param undistorted_img:
+    :param white_yellow_img:
+    :param canny_img:
+    :param binary_img:
+    :param debug_img:
+    :param final_img:
+    :return:
+    """
+
+    f = plt.figure(figsize=(19, 8))
+    plt.tight_layout()
+
+    p1 = plt.subplot(2, 4, 1)
+    p1.imshow(original_img)
+    p1.set_title(('Original Image'))
+
+    p2 = plt.subplot(2, 4, 2)
+    p2.imshow(undistorted_img)
+    p2.set_title(('Undistorted Image'))
+
+    p2 = plt.subplot(2, 4, 3)
+    p2.imshow(white_yellow_img)
+    p2.set_title(('White-Yellow Image'))
+
+    p2 = plt.subplot(2, 4, 4)
+    p2.imshow(canny_img)
+    p2.set_title(('Canny-Image'))
+
+    p2 = plt.subplot(2, 4, 5)
+    p2.imshow(binary_img, cmap='gray')
+    p2.set_title(('Binary Image'))
+
+    p2 = plt.subplot(2, 4, 6)
+    p2.imshow(debug_img)
+    p2.set_title(('Detected Lane Pixels'))
+
+    cv2.imwrite('output_images/straight_lines1_polynoms2.png', debug_img)
+
+    p2 = plt.subplot(2, 4, 7)
+    p2.imshow(final_img)
+    p2.set_title(('Final Image'))
+
+    plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
+    plt.show()
+

@@ -13,102 +13,105 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./examples/undistort_output.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[image1]: file://camera_cal_undistorted/calibration1.jpg "Undistorted Chessboard"
+[image2]: file://test_images/straight_lines1.jpg "Road Distorted"
+[image3]: file://test_images_undistorted/straight_lines1.jpg "Road Undistorted"
+[image4]: file://output_images/straight_lines1_binary2.png "Straight Lines Binary"
+[image5]: file://output_images/straight_lines1_transformed2.png "Perspective Transform"
+[image6]: file://output_images/straight_lines1_polynoms2.png "Fitted Polynom"
+[image7]: file://output_images/straight_lines1.jpg "Detected Lanes" 
+[video1]: file://project_video.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
-
----
-
-### Writeup / README
-
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
-
-You're reading it!
 
 ### Camera Calibration
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+First, the chessboard corners are found using the opencv function *findChessboardCorners()*. Then,
+the camera is calibrated by calling *calibrateCamera()* calculating the distortion coefficients and 
+camera matrix.
+
+
+The code for this step is contained in file advll_helpers.py, functions *chessboad_calibration()* and
+*compute_calib_from_chessboards()*.  
+
 
 I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
 I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
 
-![alt text][image1]
+![Undistorted Chessboard][image1]
 
 ### Pipeline (single images)
 
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+![Road Distorted][image2]
+
+The result of the undistortion process can be found here:
+
+![Road Undistorted][image3]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+All functions mentioned in the following are implemented in advll_helpers.py.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+First, I mask the image, and I filter out all parts that are neither white nor yellow, applying thresholds in HSV color space, which is done by the function white_yellow_mask. Then, I transform the image to grayscale, cut out the area defining a triangle, implemented in function grayscale. Finally, the image is converted into a binary image.
 
-![alt text][image3]
+
+![Straight Lines Binary][image4]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
 
-```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
-```
+The code for my perspective transform includes a function called `perspective_transform()`, which appears in lines 285 through 304 in the file `advll_helpers.py`. For determination of the perspective transform matrix, I implemented the function determine_transform_matrix() with hard-coded source and destination points.
 
-This resulted in the following source and destination points:
 
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image:
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+![Perspective Transform][image5]
 
-![alt text][image4]
+#### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial.
 
-#### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+The identification of the lane-line pixels is done in find_lane_pixels(), lines 310 to 400.
+As an input, the function gets the binary image. Then, for each lane, a histogram is created. The height of the image is then split up into windows with 1/9 of the total height. The peak of the initial histogram is then taken as the y-position of the first window. For each window, if more then 50 white pixels are found, these pixels are added to the ones counting as the respective lane, and the average y value of these pixels is the y-position of the following window.
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+For each lane, the positions of the identified pixels is passed to the function polyfit(), which fits a polynomial of order 2 to the pixels. An example result can be seen here:
 
-![alt text][image5]
+![Fitted Polynom][image6]
+
+To become more robust, detection data is averaged, and only data which is within certain boundaries is accepted.
+The filtering, i.e. the rejection of outliers, is done by the following filter criteria:
+
+1. The distance between both lines close to the vehicle and at the furthest point taken into account needs to be between 900 +/- 200 pixels.
+2. The difference between the x value of the lines (left and right, closest and furthest to the vehicle) and the averaged values need to be below 80 pixels
+3. The quotient of the current curvature of the left curve and the the averaged value over the last 20 values must be between 1/4 and 4
+
+
+The polynoms are calculated based on the average of the last 20 coefficient values that have passed the test.
+
+
+If there are less than 20 coefficient values available, filtering is only done by (1). All other measurement values are added to the history.
+
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+The radius is calculated in function measure_curvature_pixels(), at the position closest to the vehicle,
+based on the coefficients of the polygon. 
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in lines 536 through 568 in the function `draw_lane_and_warp_back_to_original()`.  Here is an example of my result on a test image:
 
-![alt text][image6]
+![Detected Lanes][image7]
 
 ---
 
 ### Pipeline (video)
 
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+#### 1. Provide a link to your final video output.  
 
 Here's a [link to my video result](./project_video.mp4)
 

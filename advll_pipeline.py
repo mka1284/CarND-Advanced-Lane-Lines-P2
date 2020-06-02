@@ -26,12 +26,12 @@ class LaneDetectionPipeline():
         self.attach_polynom_img = attach_polynom_img #Whether the polynom debug image should be attached to the output image
         self.left_line = Line()
         self.right_line = Line()
-        self.MAX_DEV_X_STEP = 80 #The maximum deviation of the x position of the lane from the average
+        self.MAX_DEV_X_STEP = 150 #The maximum deviation of the x position of the lane from the average
         #self.MAX_DEV_CURVE_STEP = 100000
-        self.MAX_DEV_CURVE_QUOT = 4 #The maximum deviation of the quotient of the current curve from the average
+        self.MAX_DEV_CURVE_QUOT = 3 #The maximum deviation of the quotient of the current curve from the average
         self.MAX_CURVERAD = 10000 #The maximum curve radius
 
-        self.MAX_HIST_LEN = 20 #The length of the detection history
+        self.MAX_HIST_LEN = 10 #The length of the detection history
         self.hist_len = 0 #The current length of the history
 
         self.EXPECTED_LINE_DIST = 900 #The expected distance of the lanes
@@ -64,7 +64,6 @@ class LaneDetectionPipeline():
             line.curverad = curverad
 
         elif self.hist_len < self.MAX_HIST_LEN:
-
             # add current detection to line class
             line.x = (line.x * self.hist_len + poly_x) / (self.hist_len + 1)
             line.coeffs = (line.coeffs * self.hist_len + fit_coeffs) / (self.hist_len + 1)
@@ -76,7 +75,86 @@ class LaneDetectionPipeline():
             line.curverad = (line.curverad * (self.hist_len-1) + curverad) / self.hist_len
 
 
-    def check_lines(self, left_line, right_line, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y):
+    def check_data(self, line_dist_abs_begin, line_dist_abs_end, line_pos_begin_left_delta, line_pos_end_left_delta,
+                   line_pos_begin_right_delta, line_pos_end_right_delta, curverad_delta_left_quot, curverad_delta_right_quot):
+        """
+        Check whether the submitted frame is usable.
+
+        :param line_dist_abs_begin: The distance between both detected lines in pixels right at the vehicle
+        :param line_dist_abs_end:  The distance between both detected lines in pixels at most distant point from the vehicle
+        :param line_pos_begin_left_delta: The difference between the x value of the left line closest to the vehicle and the averaged value
+        :param line_pos_end_left_delta: The difference between the x value of the left line closest to the vehicle and the averaged value
+        :param line_pos_begin_right_delta: The difference between the x value of the right line closest to the vehicle and the averaged value
+        :param line_pos_end_right_delta: The difference between the x value of the right line closest to the vehicle and the averaged value
+        :param curverad_delta_left_quot: The quotient of the current curvature of the left curve and the averaged value
+        :param curverad_delta_right_quot: The quotient of the current curvature of the right curve and the averaged value
+        :return:
+        """
+
+        if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (
+                self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
+                and (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_end < (
+                self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
+                and line_pos_begin_left_delta < self.MAX_DEV_X_STEP and line_pos_end_left_delta < self.MAX_DEV_X_STEP \
+                and line_pos_begin_right_delta < self.MAX_DEV_X_STEP and line_pos_end_right_delta < self.MAX_DEV_X_STEP \
+                and 1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_left_quot < self.MAX_DEV_CURVE_QUOT \
+                and 1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_right_quot < self.MAX_DEV_CURVE_QUOT:
+            # and curverad_delta_left < self.MAX_DEV_CURVE \
+            # and curverad_delta_right < self.MAX_DEV_CURVE:
+
+            self.subseq_not_detect = 0
+
+            return True
+
+        elif (not (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (
+                self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)):
+            self.log("line_dist_abs_begin({}) out of range: must be between {} and {}".format(line_dist_abs_begin,
+                                                                                              self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL,
+                                                                                              self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL))
+
+        elif (not (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_end < (
+                self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)):
+            self.log("line_dist_abs_end({}) out of range: must be between {} and {}".format(line_dist_abs_end,
+                                                                                            self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL,
+                                                                                            self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL))
+
+        elif (not (line_pos_begin_left_delta < self.MAX_DEV_X_STEP and line_pos_end_left_delta < self.MAX_DEV_X_STEP)):
+            self.log("line_pos_begin_left_delta({}) or end({}) out of range: must be below {}".format(
+                line_pos_begin_left_delta, line_pos_end_left_delta, self.MAX_DEV_X_STEP))
+
+        elif (not (line_pos_begin_right_delta < self.MAX_DEV_X_STEP and line_pos_end_right_delta < self.MAX_DEV_X_STEP)):
+            self.log("line_pos_begin_right_delta({}) or end({}) out of range: must be below {}".format(
+                line_pos_begin_right_delta, line_pos_end_right_delta, self.MAX_DEV_X_STEP))
+
+        elif (not (1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_left_quot < self.MAX_DEV_CURVE_QUOT)):
+            self.log(
+                "curverad_delta_left_quot({}) out of range: must be between {} and {}".format(curverad_delta_left_quot,
+                                                                                              1 / self.MAX_DEV_CURVE_QUOT,
+                                                                                              self.MAX_DEV_CURVE_QUOT))
+
+        elif (not (1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_right_quot < self.MAX_DEV_CURVE_QUOT)):
+            self.log("curverad_delta_right_quot({}) out of range: must be between {} and {}".format(
+                curverad_delta_right_quot, 1 / self.MAX_DEV_CURVE_QUOT, self.MAX_DEV_CURVE_QUOT))
+
+        else:
+            self.log("Checkdata failed for some other reason")
+
+        return False
+
+    def process_new_line_data(self, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y):
+        """
+        Process the new frame.
+
+        :param left_fit_coeffs: the coefficients of the left polynom
+        :param right_fit_coeffs: the coefficients of the right polynom
+        :param poly_left_x: the x coordinates of the left polynom
+        :param poly_right_x: the x coordinates of the right polynom
+        :param left_pix_x: the x coordinates of the pixels of the left lane
+        :param left_pix_y: the y coordinates of the pixels of the left lane
+        :param right_pix_x: the x coordinates of the pixels of the right lane
+        :param right_pix_y: the y coordinates of the pixels of the right lane
+        :return: radius and x-coordinates of the lanes
+        """
 
         left_curverad, right_curverad = advll_helpers.measure_curvature_real(left_pix_x, left_pix_y, right_pix_x, right_pix_y)
 
@@ -94,7 +172,6 @@ class LaneDetectionPipeline():
                 "Line dist begin:{}, end:{}".format(line_dist_abs_begin, line_dist_abs_end))
             return left_curverad, right_curverad, poly_left_x, poly_right_x
 
-
         ###if it is among the first n measurements:
         if (self.hist_len < self.MAX_HIST_LEN):
 
@@ -104,8 +181,8 @@ class LaneDetectionPipeline():
             if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)\
                     and (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_end < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL):
                 # add it to the list, and return the new average
-                self.add_to_list_and_avg(left_line, left_fit_coeffs, poly_left_x, left_curverad)
-                self.add_to_list_and_avg(right_line, right_fit_coeffs, poly_right_x, right_curverad)
+                self.add_to_list_and_avg(self.left_line, left_fit_coeffs, poly_left_x, left_curverad)
+                self.add_to_list_and_avg(self.right_line, right_fit_coeffs, poly_right_x, right_curverad)
                 self.hist_len = self.hist_len + 1
 
             elif (not (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)):
@@ -114,92 +191,28 @@ class LaneDetectionPipeline():
             else:
                 self.log("Line dist end out of range:{} (must be {} +- {})".format(line_dist_abs_end, self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL))
 
-            return left_line.curverad, right_line.curverad, left_line.x, right_line.x
+            return self.left_line.curverad, self.right_line.curverad, self.left_line.x, self.right_line.x
 
         else:
-            line_pos_begin_left_delta = abs(poly_left_x[0] - left_line.x[0])
-            line_pos_end_left_delta = abs(poly_left_x[len(poly_left_x) - 1] - left_line.x[len(poly_left_x) - 1])
+            line_pos_begin_left_delta = abs(poly_left_x[0] - self.left_line.x[0])
+            line_pos_end_left_delta = abs(poly_left_x[len(poly_left_x) - 1] - self.left_line.x[len(poly_left_x) - 1])
 
-            line_pos_begin_right_delta = abs(poly_right_x[0] - right_line.x[0])
-            line_pos_end_right_delta = abs(poly_right_x[len(poly_right_x) - 1] - right_line.x[len(poly_right_x) - 1])
+            line_pos_begin_right_delta = abs(poly_right_x[0] - self.right_line.x[0])
+            line_pos_end_right_delta = abs(poly_right_x[len(poly_right_x) - 1] - self.right_line.x[len(poly_right_x) - 1])
 
-            #curverad_delta_left = abs(left_curverad - left_line.curverad)
-            #curverad_delta_right = abs(right_curverad - right_line.curverad)
-
-            curverad_delta_left_quot = abs(left_curverad/left_line.curverad)
-            curverad_delta_right_quot = abs(right_curverad/right_line.curverad)
-
-            #str = "line_dist_abs_begin:{} " + \
-            #      " \n line_pos_begin_left_delta:{} \n line_pos_end_left_delta:{}" + \
-            #      " \n line_pos_begin_right_delta:{} \n line_pos_end_right_delta:{}" + \
-            #      " \n curverad_delta_right:{}, curverad_delta_left:{}" + \
-            #      " \n curverad_right:{}, curverad_left:{}" + \
-            #      " \n (EXPECTED_LINE_DIST: {}, LINE_DIST_TOL:{}, MAX_DEV_X:{}, MAX_DEV_CURVE:{})"
-
-            #str = "line_dist_abs_begin:{} " + \
-            #      " line_pos_begin_left_delta:{} line_pos_end_left_delta:{}" + \
-            #      " line_pos_begin_right_delta:{} line_pos_end_right_delta:{}" + \
-            #      " curverad_delta_right_quot:{}, curverad_delta_left_quot:{}" + \
-            #      " curverad_left:{}, curverad_right:{}" + \
-            #      " (EXPECTED_LINE_DIST: {}, LINE_DIST_TOL:{}, MAX_DEV_X:{}, MAX_DEV_CURVE_QUOT:{})"
-
-            #strFormatted = str.format(\
-            #              line_dist_abs_begin, line_pos_begin_left_delta, \
-            #              line_pos_end_left_delta, line_pos_begin_right_delta, \
-            #              line_pos_end_right_delta, curverad_delta_right_quot, curverad_delta_left_quot, \
-            #             left_curverad, right_curverad, \
-            #                self.EXPECTED_LINE_DIST, self.LINE_DIST_TOL, self.MAX_DEV_X_STEP, self.MAX_DEV_CURVE_QUOT)
-
-            #left_line.curverad
+            curverad_delta_left_quot = abs(left_curverad/self.left_line.curverad)
+            curverad_delta_right_quot = abs(right_curverad/self.right_line.curverad)
 
             str = " curverad_left:{}, curverad_right:{}" + \
                   " (AVG_LEFT: {}, AVG_RIGHT:{})"
 
-            strFormatted = str.format(left_curverad, right_curverad, left_line.curverad, right_line.curverad)
+            strFormatted = str.format(left_curverad, right_curverad, self.left_line.curverad, self.right_line.curverad)
 
             self.logfile.write(strFormatted + "\n")
 
-            # if the lines are close enough to each other and it is not too different from the previous detection
-            success = False
 
-            if (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
-                    and (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_end < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL) \
-                    and line_pos_begin_left_delta < self.MAX_DEV_X_STEP and line_pos_end_left_delta < self.MAX_DEV_X_STEP \
-                    and line_pos_begin_right_delta < self.MAX_DEV_X_STEP and line_pos_end_right_delta < self.MAX_DEV_X_STEP \
-                    and 1/self.MAX_DEV_CURVE_QUOT < curverad_delta_left_quot < self.MAX_DEV_CURVE_QUOT \
-                    and 1/self.MAX_DEV_CURVE_QUOT < curverad_delta_right_quot < self.MAX_DEV_CURVE_QUOT:
-                    #and curverad_delta_left < self.MAX_DEV_CURVE \
-                    #and curverad_delta_right < self.MAX_DEV_CURVE:
+            if(not self.check_data(line_dist_abs_begin, line_dist_abs_end, line_pos_begin_left_delta, line_pos_end_left_delta, line_pos_begin_right_delta, line_pos_end_right_delta, curverad_delta_left_quot, curverad_delta_right_quot)):
 
-                self.subseq_not_detect = 0
-
-                # add it to the list, return the new average
-                self.add_to_list_and_avg(left_line, left_fit_coeffs, poly_left_x, left_curverad)
-                self.add_to_list_and_avg(right_line, right_fit_coeffs, poly_right_x, right_curverad)
-                print(strFormatted + "\n")
-
-                success = True
-
-            elif(not(self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_begin < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)):
-                self.log("line_dist_abs_begin({}) out of range: must be between {} and {}".format(line_dist_abs_begin, self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL, self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL))
-
-            elif (not (self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL) < line_dist_abs_end < (self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL)):
-                self.log("line_dist_abs_end({}) out of range: must be between {} and {}".format(line_dist_abs_end, self.EXPECTED_LINE_DIST - self.LINE_DIST_TOL, self.EXPECTED_LINE_DIST + self.LINE_DIST_TOL))
-
-            elif(not (line_pos_begin_left_delta < self.MAX_DEV_X_STEP and line_pos_end_left_delta < self.MAX_DEV_X_STEP)):
-                self.log("line_pos_begin_left_delta({}) or end({}) out of range: must be below {}".format(line_pos_begin_left_delta, line_pos_end_left_delta, self.MAX_DEV_X_STEP))
-
-            elif(not (line_pos_begin_right_delta < self.MAX_DEV_X_STEP and line_pos_end_right_delta < self.MAX_DEV_X_STEP)):
-                self.log("line_pos_begin_right_delta({}) or end({}) out of range: must be below {}".format(line_pos_begin_right_delta, line_pos_end_right_delta, self.MAX_DEV_X_STEP))
-
-            elif(not (1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_left_quot < self.MAX_DEV_CURVE_QUOT)):
-                self.log("curverad_delta_left_quot({}) out of range: must be between {} and {}".format(curverad_delta_left_quot, 1 / self.MAX_DEV_CURVE_QUOT, self.MAX_DEV_CURVE_QUOT))
-
-            elif(not (1 / self.MAX_DEV_CURVE_QUOT < curverad_delta_right_quot < self.MAX_DEV_CURVE_QUOT)):
-                self.log("curverad_delta_right_quot({}) out of range: must be between {} and {}".format(curverad_delta_right_quot, 1 / self.MAX_DEV_CURVE_QUOT, self.MAX_DEV_CURVE_QUOT))
-
-
-            if(not success):
                 self.subseq_not_detect = self.subseq_not_detect + 1
                 errstr = "At least one value out of tolerance:\n" + strFormatted
                 print(errstr)
@@ -209,12 +222,14 @@ class LaneDetectionPipeline():
                     self.log("Resetting history because of {} bad detections".format(self.MAX_SUBSEQ_NOT_DETECT))
                     self.subseq_not_detect = 0
                     self.hist_len = 0
+            else:
+                self.add_to_list_and_avg(self.left_line, left_fit_coeffs, poly_left_x, left_curverad)
+                self.add_to_list_and_avg(self.right_line, right_fit_coeffs, poly_right_x, right_curverad)
 
-            return left_line.curverad, right_line.curverad, left_line.x, right_line.x
+            return self.left_line.curverad, self.right_line.curverad, self.left_line.x, self.right_line.x
 
 
-
-    def pipeline(self, img):
+    def pipeline(self, original_img):
 
         #* 0. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
         if not os.path.isfile('undistort_pickle.p'):
@@ -225,10 +240,10 @@ class LaneDetectionPipeline():
             #advll_helpers.correct_imgs_in_folder(mtx, dist, rvecs, tvec, 'camera_cal')
 
         #* 1. Apply a distortion correction to raw image
-        undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
+        undistorted_img = cv2.undistort(original_img, mtx, dist, None, mtx)
 
         #* 2. Use color transforms, gradients, etc., to create a thresholded binary image.
-        white_yellow_image, gray_image, blurred_image, canny_image, cut_image, binary_img = advll_helpers.create_binary_image(undistorted_img)
+        white_yellow_img, gray_img, blurred_img, canny_img, cut_img, binary_img = advll_helpers.create_binary_image(undistorted_img)
 
         #* 3. Apply a perspective transform to rectify binary image ("birds-eye view").
         perspective_trans_img, transformMatrix = advll_helpers.perspective_transform(binary_img)
@@ -247,14 +262,10 @@ class LaneDetectionPipeline():
         debug_img = advll_helpers.plot_polygon_lines(poly_y, poly_left_x, poly_right_x, debug_img, [255, 0, 0])
 
         opt_left_curverad, opt_right_curverad, opt_poly_left_x, opt_poly_right_x = \
-            self.check_lines(self.left_line, self.right_line, left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y)
+            self.process_new_line_data(left_fit_coeffs, right_fit_coeffs, poly_left_x, poly_right_x, left_pix_x, left_pix_y, right_pix_x, right_pix_y)
 
         #poly_y, opt_poly_left_x, opt_poly_right_x =  generate_polygon_lines(opt_left_fit_coeffs, opt_right_fit_coeffs, perspective_trans_img)
         debug_img = advll_helpers.plot_polygon_lines(poly_y, opt_poly_left_x, opt_poly_right_x, debug_img, [0, 0, 255])
-
-        #* 5. Determine the curvature of the lane and vehicle position with respect to center.
-        #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
-        #left_curverad, right_curverad = measure_curvature_real(left_pix_x, left_pix_y, right_pix_x, right_pix_y)
 
         Minv = np.linalg.inv(transformMatrix)
 
@@ -269,45 +280,13 @@ class LaneDetectionPipeline():
             final_img = np.concatenate((final_img, debug_img), axis=1)
 
         if self.show_imgs:
-            f = plt.figure(figsize=(19, 8))
-            plt.tight_layout()
-
-            p1 = plt.subplot(2, 4, 1)
-            p1.imshow(img)
-            p1.set_title(('Original Image'))
-
-            p2 = plt.subplot(2, 4, 2)
-            p2.imshow(undistorted_img)
-            p2.set_title(('Undistorted Image'))
-
-            p2 = plt.subplot(2, 4, 3)
-            p2.imshow(white_yellow_image)
-            p2.set_title(('White-Yellow Image'))
-
-            p2 = plt.subplot(2, 4, 4)
-            p2.imshow(canny_image)
-            p2.set_title(('Canny-Image'))
-
-            p2 = plt.subplot(2, 4, 5)
-            p2.imshow(binary_img, cmap='gray')
-            p2.set_title(('Binary Image'))
-
-            p2 = plt.subplot(2, 4, 6)
-            p2.imshow(debug_img)
-            p2.set_title(('Detected Lane Pixels'))
-
-            p2 = plt.subplot(2, 4, 7)
-            p2.imshow(final_img)
-            p2.set_title(('Final Image'))
-
-            plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
-            plt.show()
+            advll_helpers.show_imgs(original_img, undistorted_img, white_yellow_img, canny_img, binary_img, debug_img, final_img)
 
         return final_img
 
 def pipeline_on_images():
 
-    p = LaneDetectionPipeline(False, True)
+    p = LaneDetectionPipeline(False, True, False)
 
     for filename in os.listdir("test_images/"):
 
@@ -333,11 +312,13 @@ def pipeline_on_video():
     from moviepy.editor import VideoFileClip
     #from IPython.display import HTML
 
-    p = LaneDetectionPipeline(True, False, True)
+    p = LaneDetectionPipeline(True, False, False)
 
     def process_image(image):
         result = p.pipeline(image)
         return result
+
+    #white_output = 'project_video_output.mp4'
 
     white_output = 'project_video_output.mp4'
 
