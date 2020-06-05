@@ -525,10 +525,14 @@ def print_info_on_img(logfile, img, left_curve, right_curve, vehicle_pos):
     :return:
     """
 
-    avg_curve = (left_curve + right_curve) / 2
+    if (left_curve < 10000 or right_curve < 10000):
+        avg_curve = (left_curve + right_curve) / 2
+        strToPlot = "Curve: {0:.2f}, x-Pos: {1:.3f}".format(avg_curve, vehicle_pos)
+    else:
+        strToPlot = "Curve: infinite, x-Pos: {0:.3f}".format(vehicle_pos)
+
     #### write curvature on image
-    strToPlot = "Curve: {0:.2f} (L:{1:.2f}, R:{2:.2f}), x-Pos: {3:.3f}".format(avg_curve, left_curve, right_curve,
-                                                                               vehicle_pos)
+
     logfile.write(strToPlot + "\n")
     font = cv2.FONT_HERSHEY_SIMPLEX
     bottomLeftCornerOfText = (50, 50)

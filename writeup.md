@@ -22,7 +22,7 @@ The goals / steps of this project are the following:
 [image7]: file://output_images/straight_lines1.jpg "Detected Lanes" 
 [video1]: file://project_video.mp4 "Video"
 
-## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
+## Rubric Points
 
 
 ### Camera Calibration
@@ -56,6 +56,7 @@ The result of the undistortion process can be found here:
 ![Road Undistorted][image3]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+
 All functions mentioned in the following are implemented in advll_helpers.py.
 
 First, I mask the image, and I filter out all parts that are neither white nor yellow, applying thresholds in HSV color space, which is done by the function white_yellow_mask. Then, I transform the image to grayscale, cut out the area defining a triangle, implemented in function grayscale. Finally, the image is converted into a binary image.
@@ -66,7 +67,7 @@ First, I mask the image, and I filter out all parts that are neither white nor y
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
 
-The code for my perspective transform includes a function called `perspective_transform()`, which appears in lines 285 through 304 in the file `advll_helpers.py`. For determination of the perspective transform matrix, I implemented the function determine_transform_matrix() with hard-coded source and destination points.
+The code for my perspective transform includes a function called `perspective_transform()`, which appears in lines 231 through 250 in the file `advll_helpers.py`. For determination of the perspective transform matrix, I implemented the function determine_transform_matrix() with hard-coded source and destination points.
 
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image:
@@ -75,7 +76,7 @@ I verified that my perspective transform was working as expected by drawing the 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial.
 
-The identification of the lane-line pixels is done in find_lane_pixels(), lines 310 to 400.
+The identification of the lane-line pixels is done in find_lane_pixels(), lines 256 to 346.
 As an input, the function gets the binary image. Then, for each lane, a histogram is created. The height of the image is then split up into windows with 1/9 of the total height. The peak of the initial histogram is then taken as the y-position of the first window. For each window, if more then 50 white pixels are found, these pixels are added to the ones counting as the respective lane, and the average y value of these pixels is the y-position of the following window.
 
 For each lane, the positions of the identified pixels is passed to the function polyfit(), which fits a polynomial of order 2 to the pixels. An example result can be seen here:
@@ -86,14 +87,14 @@ To become more robust, detection data is averaged, and only data which is within
 The filtering, i.e. the rejection of outliers, is done by the following filter criteria:
 
 1. The distance between both lines close to the vehicle and at the furthest point taken into account needs to be between 900 +/- 200 pixels.
-2. The difference between the x value of the lines (left and right, closest and furthest to the vehicle) and the averaged values need to be below 80 pixels
-3. The quotient of the current curvature of the left curve and the the averaged value over the last 20 values must be between 1/4 and 4
+2. The difference between the x value of the lines (left and right, closest and furthest to the vehicle) and the averaged values need to be below 150 pixels
+3. The quotient of the current curvature of the left curve and the averaged value over the last 10 values must be between 1/3 and 3
 
 
-The polynoms are calculated based on the average of the last 20 coefficient values that have passed the test.
+The polynoms are calculated based on the average of the last 10 coefficient values that have passed the test.
 
 
-If there are less than 20 coefficient values available, filtering is only done by (1). All other measurement values are added to the history.
+If there are less than 10 coefficient values available, filtering is only done by (1). All other measurement values are added to the history.
 
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
@@ -119,6 +120,7 @@ Here's a [link to my video result](./project_video.mp4)
 
 ### Discussion
 
-#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+#### Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+One of main issues was how to isolate the lane pixels from the rest under different lighting conditions. Essentially, Gaussian blur and Canny filters turned out to be not helpful in this case. Masking out everything but white and yellow pixels did the trick, however there were still some outliers. A stable detection pipeline could only be achieved by extending the field of view to a maximum, so that also the dashed line on the left can be detected successfully by filtering out outliers, and averaging over the last 10 valid frames averages out the high-frequency jumps between images. 
+The pipeline is likely to fail on curves with very small radius, such that not enough lane pixels are in the frame. It could be made more robust by passing on the information where to search for the line in the frame from the results of the previous frame, to have a prior. Also information about changes of street lightning conditions could be saved and reused for a better detection.
