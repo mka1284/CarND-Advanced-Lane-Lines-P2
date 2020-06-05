@@ -91,7 +91,7 @@ The filtering, i.e. the rejection of outliers, is done by the following filter c
 3. The quotient of the current curvature of the left curve and the averaged value over the last 10 values must be between 1/3 and 3
 
 
-The polynoms are calculated based on the average of the last 10 coefficient values that have passed the test.
+The polynoms are calculated based on the average of the last 10 coefficient values that have passed the test. Curvatures higher than 10000 are clipped to 10000.
 
 
 If there are less than 10 coefficient values available, filtering is only done by (1). All other measurement values are added to the history.
